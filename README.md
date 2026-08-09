@@ -11,18 +11,7 @@
 
   IT Undergraduate | Full-Stack Developer | Software Engineer
 
-<div align="center">
-
-<img src="https://readme-typing-svg.demolab.com/?lines=Full-Stack+Developer&font=Fira+Code&center=true&width=600&height=45&size=24&color=00D9FF&duration=3000" />
-
-<img src="https://readme-typing-svg.demolab.com/?lines=Software+Engineering+Enthusiast&font=Fira+Code&center=true&width=600&height=45&size=24&color=FF4ECD&duration=3000" />
-
-<img src="https://readme-typing-svg.demolab.com/?lines=Always+Learning+New+Technologies&font=Fira+Code&center=true&width=600&height=45&size=24&color=9D4EDD&duration=3000" />
-
-<img src="https://readme-typing-svg.demolab.com/?lines=Building+Modern+Software+Solutions&font=Fira+Code&center=true&width=600&height=45&size=24&color=00F5A0&duration=3000" />
-
-</div>
-------------------------------------
+ 
 
 I am a **BSc (Hons) Information Technology undergraduate at SLIIT**, interested in building modern, scalable, and user-friendly software solutions.
 
@@ -116,7 +105,6 @@ Sri Lanka Institute of Information Technology (SLIIT)
 * Strengthening database design and software architecture skills
 
 -----
-```html
 <p align="center">
   <picture>
     <source
@@ -133,7 +121,6 @@ Sri Lanka Institute of Information Technology (SLIIT)
     />
   </picture>
 </p>
-```
 
  
 ----------

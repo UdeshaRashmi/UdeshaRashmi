@@ -2,6 +2,10 @@
 
 ### Information Technology Undergraduate | Full-Stack Developer
 
+<p align="center">
+  <img src="https://readme-typing-svg.herokuapp.com/?lines=Full-Stack+Developer;Software+Engineering+Enthusiast;Always+Learning+New+Technologies&center=true&width=500&height=50">
+</p>
+
 I am a **BSc (Hons) Information Technology undergraduate at SLIIT**, interested in building modern, scalable, and user-friendly software solutions.
 
 I enjoy working across frontend and backend development, REST APIs, databases, and modern web technologies while continuously improving my software engineering skills.
@@ -88,7 +92,7 @@ Sri Lanka Institute of Information Technology (SLIIT)
 ## 🚀 Currently Focused On
 
 * Building modern full-stack web applications
-* Improving React, Next.js and TypeScript development
+* Improving HTML, CSS, JavaScript, TypeScript, React.js, Next.js, Vue.js, Nuxt.js, Angular development
 * Developing scalable backend APIs
 * Exploring Spring Boot and microservices
 * Strengthening database design and software architecture skills
@@ -97,9 +101,43 @@ Sri Lanka Institute of Information Technology (SLIIT)
 
 ## 📫 Connect With Me
 
-* LinkedIn: **[Add your LinkedIn URL]**
-* Email: **[Add your professional email]**
-* Portfolio: **[Add portfolio URL if available]**
+* LinkedIn: **linkedin.com/in/udesha-rashmi-944894331**
+* Email: **rashmiparanamana1999@gmail.com**
+
+--------
+ ## 👋 A Little More About Me
+
+* 🔭 I’m currently building **full-stack web applications** with a strong focus on clean and responsive UI, scalable backend architecture, REST APIs and database integration.
+** 🌱 I’m continuously expanding my skills across **modern frontend and backend development, programming languages, databases, API development, software architecture, cloud technologies, and software engineering best practices**.
+* 🚀 I enjoy transforming ideas into **responsive, user-friendly and production-oriented applications**.
+* 👯 I’m open to collaborating on **open-source projects, innovative web applications, and real-world software solutions**.
+* 💡 I’m particularly interested in **Frontend Development, Full-Stack Development, Software Engineering and API Development**.
+* 🧠 I’m continuously improving my skills in **system design, database design, authentication, clean code and scalable application development**.
+* 💬 Feel free to ask me about **React, Next.js, TypeScript, REST APIs, NestJS, Spring Boot, PostgreSQL, MySQL and full-stack development**.
+* 🎯 My goal is to grow as a **Software Engineer** while building reliable, maintainable, and meaningful software products.
+ * ⚡ I’m passionate about exploring emerging technologies, solving real-world development challenges and continuously improving my skills to build efficient, scalable and high-quality software solutions.
+
+   ------
+
+ 🚀 I enjoy building end-to-end software solutions, from responsive user interfaces to backend APIs and database integration.
+
+🧠 My focus is on writing clean, maintainable code and continuously improving my problem-solving and software engineering skills.
+
+💡 I’m interested in creating practical software solutions that solve real-world problems and deliver meaningful user experiences.
+
+🤝 I’m open to collaborating on innovative software projects and learning from other developers.
+
+🎯 I’m actively preparing myself for opportunities in Software Engineering, Frontend Development, and Full-Stack Development.
+
+📚 I believe continuous learning is an essential part of becoming a better software engineer.
+
+------------
+
+
+## 📫 Connect With Me
+
+* LinkedIn: **linkedin.com/in/udesha-rashmi-944894331**
+* Email: **rashmiparanamana1999@gmail.com**
 
 <!--
 **UdeshaRashmi/UdeshaRashmi** is a ✨ _special_ ✨ repository because its `README.md` (this file) appears on your GitHub profile.

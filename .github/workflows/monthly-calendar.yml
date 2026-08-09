@@ -1,48 +1,67 @@
-name: Monthly Contribution Calendar
+ name: Monthly Contribution Calendar
 
 on:
+  # Run manually when needed
   workflow_dispatch:
 
+  # Run automatically once per day
   schedule:
-    # Update automatically every day
     - cron: "15 0 * * *"
 
+# Give the automatic GITHUB_TOKEN only the permission
+# needed to update this profile repository.
 permissions:
   contents: write
+
+# Prevent two runs from updating the same files at the same time.
+concurrency:
+  group: monthly-contribution-calendar
+  cancel-in-progress: true
 
 jobs:
   generate:
     runs-on: ubuntu-latest
 
+    # Prevent a stuck workflow from running indefinitely.
+    timeout-minutes: 10
+
     steps:
+      # Pinned to actions/checkout v7.0.1 commit for supply-chain safety.
       - name: Checkout profile repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 1
+          persist-credentials: true
 
       - name: Generate monthly contribution pages
+        shell: bash
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
           GITHUB_USER: ${{ github.repository_owner }}
 
         run: |
+          set -euo pipefail
+
           python <<'PY'
           import os
           import re
           import json
-          import math
           import calendar
           import urllib.request
+          import urllib.error
 
           from pathlib import Path
           from datetime import date, datetime, timedelta, timezone
 
 
-          # ------------------------------------------------------------
+          # ============================================================
           # CONFIG
-          # ------------------------------------------------------------
+          # ============================================================
 
           USERNAME = os.environ["GITHUB_USER"]
           TOKEN = os.environ["GITHUB_TOKEN"]
 
+          # Number of monthly calendars to keep.
           MONTHS_TO_SHOW = 12
 
           ROOT = Path(".")
@@ -53,9 +72,9 @@ jobs:
           ASSETS_DIR.mkdir(exist_ok=True)
 
 
-          # ------------------------------------------------------------
+          # ============================================================
           # DATE HELPERS
-          # ------------------------------------------------------------
+          # ============================================================
 
           def add_months(d, amount):
               index = d.year * 12 + (d.month - 1) + amount
@@ -66,7 +85,11 @@ jobs:
               return date(year, month, 1)
 
 
-          current_month = date.today().replace(day=1)
+          current_month = (
+              datetime.now(timezone.utc)
+              .date()
+              .replace(day=1)
+          )
 
           months = [
               add_months(current_month, offset)
@@ -74,21 +97,44 @@ jobs:
           ]
 
 
-          # ------------------------------------------------------------
+          # ============================================================
           # GITHUB GRAPHQL
-          # ------------------------------------------------------------
+          # ============================================================
+          #
+          # IMPORTANT PRIVACY DESIGN
+          #
+          # We intentionally DO NOT query:
+          #
+          #   repository
+          #   repository.name
+          #   commitContributionsByRepository
+          #   pullRequestContributionsByRepository
+          #   issueContributionsByRepository
+          #   resourcePath
+          #   url
+          #
+          # We only request contribution COUNTS and dates.
+          #
+          # If "Private contributions" is enabled on the GitHub profile,
+          # GitHub may expose restricted/private activity as anonymized
+          # contribution counts to viewers who cannot access those repos.
+          # ============================================================
 
           QUERY = """
           query($login: String!, $from: DateTime!, $to: DateTime!) {
             user(login: $login) {
               contributionsCollection(from: $from, to: $to) {
+
+                hasAnyRestrictedContributions
+                restrictedContributionsCount
+
                 contributionCalendar {
                   totalContributions
+
                   weeks {
                     contributionDays {
                       date
                       contributionCount
-                      color
                     }
                   }
                 }
@@ -99,20 +145,29 @@ jobs:
 
 
           def fetch_month(month_start):
-
               next_month = add_months(month_start, 1)
               month_end = next_month - timedelta(days=1)
 
               variables = {
                   "login": USERNAME,
-                  "from": f"{month_start.isoformat()}T00:00:00Z",
-                  "to": f"{month_end.isoformat()}T23:59:59Z",
+                  "from": (
+                      f"{month_start.isoformat()}"
+                      "T00:00:00Z"
+                  ),
+                  "to": (
+                      f"{month_end.isoformat()}"
+                      "T23:59:59Z"
+                  ),
               }
 
-              body = json.dumps({
+              payload = {
                   "query": QUERY,
-                  "variables": variables
-              }).encode("utf-8")
+                  "variables": variables,
+              }
+
+              body = json.dumps(
+                  payload
+              ).encode("utf-8")
 
               request = urllib.request.Request(
                   "https://api.github.com/graphql",
@@ -120,57 +175,146 @@ jobs:
                   headers={
                       "Authorization": f"Bearer {TOKEN}",
                       "Content-Type": "application/json",
-                      "User-Agent": "monthly-contribution-calendar"
+                      "Accept": "application/vnd.github+json",
+                      "User-Agent": (
+                          "secure-monthly-contribution-calendar"
+                      ),
                   },
-                  method="POST"
+                  method="POST",
               )
 
-              with urllib.request.urlopen(request) as response:
-                  result = json.load(response)
+              try:
+                  with urllib.request.urlopen(
+                      request,
+                      timeout=30,
+                  ) as response:
+                      result = json.load(response)
+
+              except urllib.error.HTTPError as error:
+                  # Do not print authorization headers or token.
+                  raise RuntimeError(
+                      "GitHub GraphQL request failed "
+                      f"with HTTP status {error.code}."
+                  ) from error
+
+              except urllib.error.URLError as error:
+                  raise RuntimeError(
+                      "Could not connect to GitHub GraphQL API."
+                  ) from error
+
 
               if result.get("errors"):
+                  safe_errors = []
+
+                  for error in result["errors"]:
+                      safe_errors.append(
+                          {
+                              "message": error.get(
+                                  "message",
+                                  "Unknown GraphQL error",
+                              )
+                          }
+                      )
+
                   raise RuntimeError(
-                      "GitHub GraphQL error:\n" +
-                      json.dumps(result["errors"], indent=2)
+                      "GitHub GraphQL error:\n"
+                      + json.dumps(
+                          safe_errors,
+                          indent=2,
+                      )
                   )
 
-              user = result.get("data", {}).get("user")
+
+              user = (
+                  result
+                  .get("data", {})
+                  .get("user")
+              )
 
               if not user:
                   raise RuntimeError(
-                      f"GitHub user '{USERNAME}' was not found."
+                      f"GitHub user '{USERNAME}' "
+                      "was not found."
                   )
 
-              calendar_data = (
-                  user["contributionsCollection"]
-                  ["contributionCalendar"]
-              )
+
+              collection = user[
+                  "contributionsCollection"
+              ]
+
+              calendar_data = collection[
+                  "contributionCalendar"
+              ]
+
 
               counts = {}
 
               for week in calendar_data["weeks"]:
                   for day in week["contributionDays"]:
 
-                      day_date = date.fromisoformat(day["date"])
+                      day_date = date.fromisoformat(
+                          day["date"]
+                      )
 
                       if (
-                          day_date.year == month_start.year
-                          and day_date.month == month_start.month
+                          day_date.year
+                          == month_start.year
+                          and
+                          day_date.month
+                          == month_start.month
                       ):
-                          counts[day_date] = day["contributionCount"]
+                          counts[day_date] = int(
+                              day["contributionCount"]
+                          )
+
+
+              # We deliberately do not expose a public/private
+              # contribution breakdown.
+              #
+              # This boolean is only used internally so the workflow
+              # can know whether GitHub supplied restricted activity.
+              has_restricted = bool(
+                  collection[
+                      "hasAnyRestrictedContributions"
+                  ]
+              )
+
+              # Read for verification only.
+              # Never write this private/public breakdown into
+              # README, SVG, JSON, or generated files.
+              restricted_count = int(
+                  collection[
+                      "restrictedContributionsCount"
+                  ]
+              )
+
+              # Basic consistency check.
+              if (
+                  restricted_count > 0
+                  and not has_restricted
+              ):
+                  raise RuntimeError(
+                      "GitHub returned inconsistent "
+                      "restricted contribution metadata."
+                  )
+
 
               return (
                   counts,
-                  calendar_data["totalContributions"]
+                  int(
+                      calendar_data[
+                          "totalContributions"
+                      ]
+                  ),
+                  has_restricted,
               )
 
 
-          # ------------------------------------------------------------
-          # SVG GENERATOR
-          # ------------------------------------------------------------
+          # ============================================================
+          # SVG HELPERS
+          # ============================================================
 
           def contribution_color(count, maximum):
-
               if count == 0:
                   return "#161B22"
 
@@ -194,16 +338,27 @@ jobs:
               return "#EC4899"
 
 
-          def generate_svg(month_start, counts, total):
-
+          def generate_svg(
+              month_start,
+              counts,
+              total,
+          ):
               year = month_start.year
               month = month_start.month
 
-              title = f"{calendar.month_name[month]} {year}"
+              title = (
+                  f"{calendar.month_name[month]} "
+                  f"{year}"
+              )
 
-              cal = calendar.Calendar(firstweekday=6)
+              cal = calendar.Calendar(
+                  firstweekday=6
+              )
 
-              weeks = cal.monthdatescalendar(year, month)
+              weeks = cal.monthdatescalendar(
+                  year,
+                  month,
+              )
 
               WIDTH = 850
               HEIGHT = 565
@@ -217,78 +372,90 @@ jobs:
               GAP_X = 8
               GAP_Y = 8
 
-              max_count = max(counts.values(), default=0)
+              max_count = max(
+                  counts.values(),
+                  default=0,
+              )
 
               svg = []
 
+
               svg.append(
                   f'''<svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="{WIDTH}"
-                      height="{HEIGHT}"
-                      viewBox="0 0 {WIDTH} {HEIGHT}"
-                      role="img"
-                      aria-label="{title} GitHub contributions"
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="{WIDTH}"
+                    height="{HEIGHT}"
+                    viewBox="0 0 {WIDTH} {HEIGHT}"
+                    role="img"
+                    aria-label="{title} GitHub contributions"
                   >'''
               )
+
 
               # Background
               svg.append(
                   f'''
                   <rect
-                      width="{WIDTH}"
-                      height="{HEIGHT}"
-                      rx="24"
-                      fill="#0D1117"
+                    width="{WIDTH}"
+                    height="{HEIGHT}"
+                    rx="24"
+                    fill="#0D1117"
                   />
                   '''
               )
+
 
               # Border
               svg.append(
                   f'''
                   <rect
-                      x="1"
-                      y="1"
-                      width="{WIDTH - 2}"
-                      height="{HEIGHT - 2}"
-                      rx="23"
-                      fill="none"
-                      stroke="#30363D"
+                    x="1"
+                    y="1"
+                    width="{WIDTH - 2}"
+                    height="{HEIGHT - 2}"
+                    rx="23"
+                    fill="none"
+                    stroke="#30363D"
                   />
                   '''
               )
+
 
               # Title
               svg.append(
                   f'''
                   <text
-                      x="50"
-                      y="55"
-                      fill="#F0F6FC"
-                      font-size="27"
-                      font-weight="700"
-                      font-family="Arial, sans-serif"
+                    x="50"
+                    y="55"
+                    fill="#F0F6FC"
+                    font-size="27"
+                    font-weight="700"
+                    font-family="Arial, sans-serif"
                   >
-                      {title}
+                    {title}
                   </text>
                   '''
               )
 
-              # Total contributions
+
+              # Total contribution count.
+              #
+              # No repository names or private/public breakdown
+              # are displayed.
               svg.append(
                   f'''
                   <text
-                      x="50"
-                      y="88"
-                      fill="#8B949E"
-                      font-size="15"
-                      font-family="Arial, sans-serif"
+                    x="50"
+                    y="88"
+                    fill="#8B949E"
+                    font-size="15"
+                    font-family="Arial, sans-serif"
                   >
-                      {total} contributions
+                    {total} contributions
                   </text>
                   '''
               )
+
 
               # Legend
               legend_colors = [
@@ -297,7 +464,7 @@ jobs:
                   "#4F46E5",
                   "#7C3AED",
                   "#A855F7",
-                  "#EC4899"
+                  "#EC4899",
               ]
 
               legend_x = 565
@@ -305,30 +472,31 @@ jobs:
               svg.append(
                   '''
                   <text
-                      x="525"
-                      y="84"
-                      fill="#8B949E"
-                      font-size="12"
-                      font-family="Arial, sans-serif"
+                    x="525"
+                    y="84"
+                    fill="#8B949E"
+                    font-size="12"
+                    font-family="Arial, sans-serif"
                   >
-                      Less
+                    Less
                   </text>
                   '''
               )
 
-              for i, color in enumerate(legend_colors):
-
+              for i, color in enumerate(
+                  legend_colors
+              ):
                   x = legend_x + i * 24
 
                   svg.append(
                       f'''
                       <rect
-                          x="{x}"
-                          y="71"
-                          width="17"
-                          height="17"
-                          rx="4"
-                          fill="{color}"
+                        x="{x}"
+                        y="71"
+                        width="17"
+                        height="17"
+                        rx="4"
+                        fill="{color}"
                       />
                       '''
                   )
@@ -336,16 +504,17 @@ jobs:
               svg.append(
                   '''
                   <text
-                      x="718"
-                      y="84"
-                      fill="#8B949E"
-                      font-size="12"
-                      font-family="Arial, sans-serif"
+                    x="718"
+                    y="84"
+                    fill="#8B949E"
+                    font-size="12"
+                    font-family="Arial, sans-serif"
                   >
-                      More
+                    More
                   </text>
                   '''
               )
+
 
               # Weekday names
               weekdays = [
@@ -355,68 +524,91 @@ jobs:
                   "WED",
                   "THU",
                   "FRI",
-                  "SAT"
+                  "SAT",
               ]
 
-              for col, weekday in enumerate(weekdays):
-
-                  x = START_X + col * (CELL_W + GAP_X) + CELL_W / 2
+              for col, weekday in enumerate(
+                  weekdays
+              ):
+                  x = (
+                      START_X
+                      + col * (CELL_W + GAP_X)
+                      + CELL_W / 2
+                  )
 
                   svg.append(
                       f'''
                       <text
-                          x="{x}"
-                          y="125"
-                          text-anchor="middle"
-                          fill="#8B949E"
-                          font-size="12"
-                          font-weight="600"
-                          font-family="Arial, sans-serif"
+                        x="{x}"
+                        y="125"
+                        text-anchor="middle"
+                        fill="#8B949E"
+                        font-size="12"
+                        font-weight="600"
+                        font-family="Arial, sans-serif"
                       >
-                          {weekday}
+                        {weekday}
                       </text>
                       '''
                   )
 
-              # Day cells
+
+              # Calendar cells
               for row, week in enumerate(weeks):
 
                   for col, day in enumerate(week):
 
-                      x = START_X + col * (CELL_W + GAP_X)
-                      y = START_Y + row * (CELL_H + GAP_Y)
+                      x = (
+                          START_X
+                          + col * (
+                              CELL_W + GAP_X
+                          )
+                      )
 
-                      # Days outside current month
+                      y = (
+                          START_Y
+                          + row * (
+                              CELL_H + GAP_Y
+                          )
+                      )
+
+
+                      # Days outside this month.
                       if day.month != month:
 
                           svg.append(
                               f'''
                               <rect
-                                  x="{x}"
-                                  y="{y}"
-                                  width="{CELL_W}"
-                                  height="{CELL_H}"
-                                  rx="9"
-                                  fill="#0D1117"
-                                  stroke="#161B22"
+                                x="{x}"
+                                y="{y}"
+                                width="{CELL_W}"
+                                height="{CELL_H}"
+                                rx="9"
+                                fill="#0D1117"
+                                stroke="#161B22"
                               />
                               '''
                           )
 
                           continue
 
-                      count = counts.get(day, 0)
+
+                      count = counts.get(
+                          day,
+                          0,
+                      )
 
                       color = contribution_color(
                           count,
-                          max_count
+                          max_count,
                       )
 
                       tooltip = (
-                          f"{day.strftime('%B %d, %Y')} — "
-                          f"{count} contribution"
+                          f"{day.strftime('%B %d, %Y')}"
+                          f" — {count} contribution"
                           f"{'' if count == 1 else 's'}"
                       )
+
 
                       svg.append("<g>")
 
@@ -427,54 +619,61 @@ jobs:
                       svg.append(
                           f'''
                           <rect
-                              x="{x}"
-                              y="{y}"
-                              width="{CELL_W}"
-                              height="{CELL_H}"
-                              rx="9"
-                              fill="{color}"
-                              stroke="#30363D"
-                              stroke-width="1"
+                            x="{x}"
+                            y="{y}"
+                            width="{CELL_W}"
+                            height="{CELL_H}"
+                            rx="9"
+                            fill="{color}"
+                            stroke="#30363D"
+                            stroke-width="1"
                           />
                           '''
                       )
+
 
                       # Day number
                       svg.append(
                           f'''
                           <text
-                              x="{x + 12}"
-                              y="{y + 23}"
-                              fill="#F0F6FC"
-                              font-size="15"
-                              font-weight="700"
-                              font-family="Arial, sans-serif"
+                            x="{x + 12}"
+                            y="{y + 23}"
+                            fill="#F0F6FC"
+                            font-size="15"
+                            font-weight="700"
+                            font-family="Arial, sans-serif"
                           >
-                              {day.day}
+                            {day.day}
                           </text>
                           '''
                       )
 
-                      # Contribution count
+
+                      # Contribution count.
+                      #
+                      # This is the anonymized GitHub contribution
+                      # calendar number only.
                       if count > 0:
 
                           svg.append(
                               f'''
                               <text
-                                  x="{x + CELL_W - 12}"
-                                  y="{y + 44}"
-                                  text-anchor="end"
-                                  fill="#FFFFFF"
-                                  font-size="11"
-                                  font-weight="600"
-                                  font-family="Arial, sans-serif"
+                                x="{x + CELL_W - 12}"
+                                y="{y + 44}"
+                                text-anchor="end"
+                                fill="#FFFFFF"
+                                font-size="11"
+                                font-weight="600"
+                                font-family="Arial, sans-serif"
                               >
-                                  {count} contrib.
+                                {count} contrib.
                               </text>
                               '''
                           )
 
+
                       svg.append("</g>")
+
 
               # Footer
               footer_y = HEIGHT - 28
@@ -482,14 +681,14 @@ jobs:
               svg.append(
                   f'''
                   <text
-                      x="{WIDTH / 2}"
-                      y="{footer_y}"
-                      text-anchor="middle"
-                      fill="#6E7681"
-                      font-size="12"
-                      font-family="Arial, sans-serif"
+                    x="{WIDTH / 2}"
+                    y="{footer_y}"
+                    text-anchor="middle"
+                    fill="#6E7681"
+                    font-size="12"
+                    font-family="Arial, sans-serif"
                   >
-                      @{USERNAME} • GitHub Contribution Activity
+                    @{USERNAME} • GitHub Contribution Activity
                   </text>
                   '''
               )
@@ -499,53 +698,80 @@ jobs:
               return "\n".join(svg)
 
 
-          # ------------------------------------------------------------
-          # GENERATE ALL 12 MONTHS
-          # ------------------------------------------------------------
+          # ============================================================
+          # GENERATE MONTHLY DATA
+          # ============================================================
 
           results = []
+
+          private_activity_seen = False
+
 
           for month_start in months:
 
               print(
                   "Generating:",
-                  month_start.strftime("%B %Y")
+                  month_start.strftime(
+                      "%B %Y"
+                  ),
               )
 
-              counts, total = fetch_month(month_start)
+              (
+                  counts,
+                  total,
+                  has_restricted,
+              ) = fetch_month(month_start)
 
-              key = month_start.strftime("%Y-%m")
+
+              if has_restricted:
+                  private_activity_seen = True
+
+
+              key = month_start.strftime(
+                  "%Y-%m"
+              )
 
               svg = generate_svg(
                   month_start,
                   counts,
-                  total
+                  total,
               )
 
-              svg_file = ASSETS_DIR / f"{key}.svg"
+              svg_file = (
+                  ASSETS_DIR
+                  / f"{key}.svg"
+              )
 
               svg_file.write_text(
                   svg,
-                  encoding="utf-8"
+                  encoding="utf-8",
               )
 
-              results.append({
-                  "date": month_start,
-                  "key": key,
-                  "total": total
-              })
+
+              results.append(
+                  {
+                      "date": month_start,
+                      "key": key,
+                      "total": total,
+                  }
+              )
 
 
-          # ------------------------------------------------------------
-          # MONTH PAGES WITH PREVIOUS / NEXT
-          # ------------------------------------------------------------
+          # ============================================================
+          # MONTH PAGES
+          # ============================================================
 
           for index, item in enumerate(results):
 
               month_start = item["date"]
               key = item["key"]
 
-              month_title = month_start.strftime("%B %Y")
+              month_title = (
+                  month_start.strftime(
+                      "%B %Y"
+                  )
+              )
+
 
               previous_item = (
                   results[index - 1]
@@ -559,21 +785,31 @@ jobs:
                   else None
               )
 
+
               previous_link = (
-                  f'<a href="./{previous_item["key"]}.md">'
-                  f'⬅ {previous_item["date"].strftime("%B %Y")}'
-                  f'</a>'
+                  (
+                      f'<a href="./'
+                      f'{previous_item["key"]}.md">'
+                      f'⬅ '
+                      f'{previous_item["date"].strftime("%B %Y")}'
+                      f'</a>'
+                  )
                   if previous_item
                   else "⬅ Previous"
               )
 
+
               next_link = (
-                  f'<a href="./{next_item["key"]}.md">'
-                  f'{next_item["date"].strftime("%B %Y")} ➡'
-                  f'</a>'
+                  (
+                      f'<a href="./'
+                      f'{next_item["key"]}.md">'
+                      f'{next_item["date"].strftime("%B %Y")}'
+                      f' ➡</a>'
+                  )
                   if next_item
                   else "Next ➡"
               )
+
 
               page = f"""# 📅 {month_title} Contributions
 
@@ -604,31 +840,49 @@ jobs:
           </p>
           """
 
-              page_file = ACTIVITY_DIR / f"{key}.md"
+
+              page_file = (
+                  ACTIVITY_DIR
+                  / f"{key}.md"
+              )
 
               page_file.write_text(
                   page,
-                  encoding="utf-8"
+                  encoding="utf-8",
               )
 
 
-          # ------------------------------------------------------------
+          # ============================================================
           # ALL MONTHS INDEX
-          # ------------------------------------------------------------
+          # ============================================================
 
           rows = []
 
-          reversed_results = list(reversed(results))
+          reversed_results = list(
+              reversed(results)
+          )
 
-          for i in range(0, len(reversed_results), 3):
 
-              group = reversed_results[i:i + 3]
+          for i in range(
+              0,
+              len(reversed_results),
+              3,
+          ):
+
+              group = reversed_results[
+                  i:i + 3
+              ]
 
               cells = []
 
+
               for item in group:
 
-                  label = item["date"].strftime("%B %Y")
+                  label = item[
+                      "date"
+                  ].strftime(
+                      "%B %Y"
+                  )
 
                   cells.append(
                       f'''
@@ -642,16 +896,17 @@ jobs:
                       '''
                   )
 
-              while len(cells) < 3:
 
+              while len(cells) < 3:
                   cells.append(
                       '<td width="33%"></td>'
                   )
 
+
               rows.append(
-                  "<tr>" +
-                  "".join(cells) +
-                  "</tr>"
+                  "<tr>"
+                  + "".join(cells)
+                  + "</tr>"
               )
 
 
@@ -672,20 +927,30 @@ jobs:
           </p>
           """
 
-          (ACTIVITY_DIR / "README.md").write_text(
+
+          (
+              ACTIVITY_DIR
+              / "README.md"
+          ).write_text(
               index_page,
-              encoding="utf-8"
+              encoding="utf-8",
           )
 
 
-          # ------------------------------------------------------------
-          # UPDATE MAIN PROFILE README AUTOMATICALLY
-          # ------------------------------------------------------------
+          # ============================================================
+          # UPDATE MAIN PROFILE README
+          # ============================================================
 
           latest = results[-1]
 
-          latest_title = latest["date"].strftime("%B %Y")
+          latest_title = latest[
+              "date"
+          ].strftime(
+              "%B %Y"
+          )
+
           latest_key = latest["key"]
+
 
           profile_section = f"""<!-- MONTHLY-CONTRIBUTIONS:START -->
 
@@ -716,6 +981,7 @@ jobs:
 
           readme_path = ROOT / "README.md"
 
+
           if readme_path.exists():
 
               readme = readme_path.read_text(
@@ -723,13 +989,16 @@ jobs:
               )
 
           else:
-              readme = f"# {USERNAME}\n"
+
+              readme = (
+                  f"# {USERNAME}\n"
+              )
 
 
           pattern = re.compile(
               r"<!-- MONTHLY-CONTRIBUTIONS:START -->.*?"
               r"<!-- MONTHLY-CONTRIBUTIONS:END -->",
-              re.DOTALL
+              re.DOTALL,
           )
 
 
@@ -737,49 +1006,93 @@ jobs:
 
               readme = pattern.sub(
                   profile_section,
-                  readme
+                  readme,
               )
 
           else:
 
               readme = (
-                  readme.rstrip() +
-                  "\n\n---\n\n" +
-                  profile_section +
-                  "\n"
+                  readme.rstrip()
+                  + "\n\n---\n\n"
+                  + profile_section
+                  + "\n"
               )
 
 
           readme_path.write_text(
               readme,
-              encoding="utf-8"
+              encoding="utf-8",
           )
 
 
+          # ============================================================
+          # SAFE WORKFLOW OUTPUT
+          # ============================================================
+
           print("")
-          print("✅ Monthly contribution calendar generated.")
+          print(
+              "✅ Monthly contribution calendar generated."
+          )
+
           print(
               f"✅ Latest month: {latest_title}"
           )
+
           print(
               f"✅ Generated {len(results)} monthly pages."
           )
+
           print(
               "✅ README.md updated automatically."
           )
 
+          # Do NOT print:
+          # - private repository names
+          # - private repository URLs
+          # - private commit messages
+          # - restricted contribution counts broken down by repo
+          #
+          # Only confirm whether GitHub returned anonymized
+          # restricted activity somewhere in the period.
+
+          if private_activity_seen:
+              print(
+                  "✅ GitHub supplied anonymized restricted "
+                  "contribution activity."
+              )
+          else:
+              print(
+                  "ℹ️ No anonymized restricted activity was "
+                  "reported for this 12-month period."
+              )
+
           PY
 
-      - name: Commit generated contribution pages
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add README.md activity/
+      - name: Commit generated contribution pages
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+        run: |
+          set -euo pipefail
+
+          git config \
+            user.name \
+            "github-actions[bot]"
+
+          git config \
+            user.email \
+            "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add -- README.md activity/
 
           if git diff --cached --quiet; then
             echo "No contribution changes to commit."
-          else
-            git commit -m "chore: update monthly contribution calendar"
-            git push
+            exit 0
           fi
+
+          git commit \
+            -m "chore: update monthly contribution calendar"
+
+          git push

@@ -1,0 +1,785 @@
+name: Monthly Contribution Calendar
+
+on:
+  workflow_dispatch:
+
+  schedule:
+    # Update automatically every day
+    - cron: "15 0 * * *"
+
+permissions:
+  contents: write
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout profile repository
+        uses: actions/checkout@v4
+
+      - name: Generate monthly contribution pages
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_USER: ${{ github.repository_owner }}
+
+        run: |
+          python <<'PY'
+          import os
+          import re
+          import json
+          import math
+          import calendar
+          import urllib.request
+
+          from pathlib import Path
+          from datetime import date, datetime, timedelta, timezone
+
+
+          # ------------------------------------------------------------
+          # CONFIG
+          # ------------------------------------------------------------
+
+          USERNAME = os.environ["GITHUB_USER"]
+          TOKEN = os.environ["GITHUB_TOKEN"]
+
+          MONTHS_TO_SHOW = 12
+
+          ROOT = Path(".")
+          ACTIVITY_DIR = ROOT / "activity"
+          ASSETS_DIR = ACTIVITY_DIR / "assets"
+
+          ACTIVITY_DIR.mkdir(exist_ok=True)
+          ASSETS_DIR.mkdir(exist_ok=True)
+
+
+          # ------------------------------------------------------------
+          # DATE HELPERS
+          # ------------------------------------------------------------
+
+          def add_months(d, amount):
+              index = d.year * 12 + (d.month - 1) + amount
+
+              year = index // 12
+              month = index % 12 + 1
+
+              return date(year, month, 1)
+
+
+          current_month = date.today().replace(day=1)
+
+          months = [
+              add_months(current_month, offset)
+              for offset in range(-(MONTHS_TO_SHOW - 1), 1)
+          ]
+
+
+          # ------------------------------------------------------------
+          # GITHUB GRAPHQL
+          # ------------------------------------------------------------
+
+          QUERY = """
+          query($login: String!, $from: DateTime!, $to: DateTime!) {
+            user(login: $login) {
+              contributionsCollection(from: $from, to: $to) {
+                contributionCalendar {
+                  totalContributions
+                  weeks {
+                    contributionDays {
+                      date
+                      contributionCount
+                      color
+                    }
+                  }
+                }
+              }
+            }
+          }
+          """
+
+
+          def fetch_month(month_start):
+
+              next_month = add_months(month_start, 1)
+              month_end = next_month - timedelta(days=1)
+
+              variables = {
+                  "login": USERNAME,
+                  "from": f"{month_start.isoformat()}T00:00:00Z",
+                  "to": f"{month_end.isoformat()}T23:59:59Z",
+              }
+
+              body = json.dumps({
+                  "query": QUERY,
+                  "variables": variables
+              }).encode("utf-8")
+
+              request = urllib.request.Request(
+                  "https://api.github.com/graphql",
+                  data=body,
+                  headers={
+                      "Authorization": f"Bearer {TOKEN}",
+                      "Content-Type": "application/json",
+                      "User-Agent": "monthly-contribution-calendar"
+                  },
+                  method="POST"
+              )
+
+              with urllib.request.urlopen(request) as response:
+                  result = json.load(response)
+
+              if result.get("errors"):
+                  raise RuntimeError(
+                      "GitHub GraphQL error:\n" +
+                      json.dumps(result["errors"], indent=2)
+                  )
+
+              user = result.get("data", {}).get("user")
+
+              if not user:
+                  raise RuntimeError(
+                      f"GitHub user '{USERNAME}' was not found."
+                  )
+
+              calendar_data = (
+                  user["contributionsCollection"]
+                  ["contributionCalendar"]
+              )
+
+              counts = {}
+
+              for week in calendar_data["weeks"]:
+                  for day in week["contributionDays"]:
+
+                      day_date = date.fromisoformat(day["date"])
+
+                      if (
+                          day_date.year == month_start.year
+                          and day_date.month == month_start.month
+                      ):
+                          counts[day_date] = day["contributionCount"]
+
+              return (
+                  counts,
+                  calendar_data["totalContributions"]
+              )
+
+
+          # ------------------------------------------------------------
+          # SVG GENERATOR
+          # ------------------------------------------------------------
+
+          def contribution_color(count, maximum):
+
+              if count == 0:
+                  return "#161B22"
+
+              if maximum <= 0:
+                  return "#312E81"
+
+              ratio = count / maximum
+
+              if ratio <= 0.20:
+                  return "#312E81"
+
+              if ratio <= 0.40:
+                  return "#4F46E5"
+
+              if ratio <= 0.60:
+                  return "#7C3AED"
+
+              if ratio <= 0.80:
+                  return "#A855F7"
+
+              return "#EC4899"
+
+
+          def generate_svg(month_start, counts, total):
+
+              year = month_start.year
+              month = month_start.month
+
+              title = f"{calendar.month_name[month]} {year}"
+
+              cal = calendar.Calendar(firstweekday=6)
+
+              weeks = cal.monthdatescalendar(year, month)
+
+              WIDTH = 850
+              HEIGHT = 565
+
+              START_X = 65
+              START_Y = 145
+
+              CELL_W = 100
+              CELL_H = 59
+
+              GAP_X = 8
+              GAP_Y = 8
+
+              max_count = max(counts.values(), default=0)
+
+              svg = []
+
+              svg.append(
+                  f'''<svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="{WIDTH}"
+                      height="{HEIGHT}"
+                      viewBox="0 0 {WIDTH} {HEIGHT}"
+                      role="img"
+                      aria-label="{title} GitHub contributions"
+                  >'''
+              )
+
+              # Background
+              svg.append(
+                  f'''
+                  <rect
+                      width="{WIDTH}"
+                      height="{HEIGHT}"
+                      rx="24"
+                      fill="#0D1117"
+                  />
+                  '''
+              )
+
+              # Border
+              svg.append(
+                  f'''
+                  <rect
+                      x="1"
+                      y="1"
+                      width="{WIDTH - 2}"
+                      height="{HEIGHT - 2}"
+                      rx="23"
+                      fill="none"
+                      stroke="#30363D"
+                  />
+                  '''
+              )
+
+              # Title
+              svg.append(
+                  f'''
+                  <text
+                      x="50"
+                      y="55"
+                      fill="#F0F6FC"
+                      font-size="27"
+                      font-weight="700"
+                      font-family="Arial, sans-serif"
+                  >
+                      {title}
+                  </text>
+                  '''
+              )
+
+              # Total contributions
+              svg.append(
+                  f'''
+                  <text
+                      x="50"
+                      y="88"
+                      fill="#8B949E"
+                      font-size="15"
+                      font-family="Arial, sans-serif"
+                  >
+                      {total} contributions
+                  </text>
+                  '''
+              )
+
+              # Legend
+              legend_colors = [
+                  "#161B22",
+                  "#312E81",
+                  "#4F46E5",
+                  "#7C3AED",
+                  "#A855F7",
+                  "#EC4899"
+              ]
+
+              legend_x = 565
+
+              svg.append(
+                  '''
+                  <text
+                      x="525"
+                      y="84"
+                      fill="#8B949E"
+                      font-size="12"
+                      font-family="Arial, sans-serif"
+                  >
+                      Less
+                  </text>
+                  '''
+              )
+
+              for i, color in enumerate(legend_colors):
+
+                  x = legend_x + i * 24
+
+                  svg.append(
+                      f'''
+                      <rect
+                          x="{x}"
+                          y="71"
+                          width="17"
+                          height="17"
+                          rx="4"
+                          fill="{color}"
+                      />
+                      '''
+                  )
+
+              svg.append(
+                  '''
+                  <text
+                      x="718"
+                      y="84"
+                      fill="#8B949E"
+                      font-size="12"
+                      font-family="Arial, sans-serif"
+                  >
+                      More
+                  </text>
+                  '''
+              )
+
+              # Weekday names
+              weekdays = [
+                  "SUN",
+                  "MON",
+                  "TUE",
+                  "WED",
+                  "THU",
+                  "FRI",
+                  "SAT"
+              ]
+
+              for col, weekday in enumerate(weekdays):
+
+                  x = START_X + col * (CELL_W + GAP_X) + CELL_W / 2
+
+                  svg.append(
+                      f'''
+                      <text
+                          x="{x}"
+                          y="125"
+                          text-anchor="middle"
+                          fill="#8B949E"
+                          font-size="12"
+                          font-weight="600"
+                          font-family="Arial, sans-serif"
+                      >
+                          {weekday}
+                      </text>
+                      '''
+                  )
+
+              # Day cells
+              for row, week in enumerate(weeks):
+
+                  for col, day in enumerate(week):
+
+                      x = START_X + col * (CELL_W + GAP_X)
+                      y = START_Y + row * (CELL_H + GAP_Y)
+
+                      # Days outside current month
+                      if day.month != month:
+
+                          svg.append(
+                              f'''
+                              <rect
+                                  x="{x}"
+                                  y="{y}"
+                                  width="{CELL_W}"
+                                  height="{CELL_H}"
+                                  rx="9"
+                                  fill="#0D1117"
+                                  stroke="#161B22"
+                              />
+                              '''
+                          )
+
+                          continue
+
+                      count = counts.get(day, 0)
+
+                      color = contribution_color(
+                          count,
+                          max_count
+                      )
+
+                      tooltip = (
+                          f"{day.strftime('%B %d, %Y')} — "
+                          f"{count} contribution"
+                          f"{'' if count == 1 else 's'}"
+                      )
+
+                      svg.append("<g>")
+
+                      svg.append(
+                          f"<title>{tooltip}</title>"
+                      )
+
+                      svg.append(
+                          f'''
+                          <rect
+                              x="{x}"
+                              y="{y}"
+                              width="{CELL_W}"
+                              height="{CELL_H}"
+                              rx="9"
+                              fill="{color}"
+                              stroke="#30363D"
+                              stroke-width="1"
+                          />
+                          '''
+                      )
+
+                      # Day number
+                      svg.append(
+                          f'''
+                          <text
+                              x="{x + 12}"
+                              y="{y + 23}"
+                              fill="#F0F6FC"
+                              font-size="15"
+                              font-weight="700"
+                              font-family="Arial, sans-serif"
+                          >
+                              {day.day}
+                          </text>
+                          '''
+                      )
+
+                      # Contribution count
+                      if count > 0:
+
+                          svg.append(
+                              f'''
+                              <text
+                                  x="{x + CELL_W - 12}"
+                                  y="{y + 44}"
+                                  text-anchor="end"
+                                  fill="#FFFFFF"
+                                  font-size="11"
+                                  font-weight="600"
+                                  font-family="Arial, sans-serif"
+                              >
+                                  {count} contrib.
+                              </text>
+                              '''
+                          )
+
+                      svg.append("</g>")
+
+              # Footer
+              footer_y = HEIGHT - 28
+
+              svg.append(
+                  f'''
+                  <text
+                      x="{WIDTH / 2}"
+                      y="{footer_y}"
+                      text-anchor="middle"
+                      fill="#6E7681"
+                      font-size="12"
+                      font-family="Arial, sans-serif"
+                  >
+                      @{USERNAME} • GitHub Contribution Activity
+                  </text>
+                  '''
+              )
+
+              svg.append("</svg>")
+
+              return "\n".join(svg)
+
+
+          # ------------------------------------------------------------
+          # GENERATE ALL 12 MONTHS
+          # ------------------------------------------------------------
+
+          results = []
+
+          for month_start in months:
+
+              print(
+                  "Generating:",
+                  month_start.strftime("%B %Y")
+              )
+
+              counts, total = fetch_month(month_start)
+
+              key = month_start.strftime("%Y-%m")
+
+              svg = generate_svg(
+                  month_start,
+                  counts,
+                  total
+              )
+
+              svg_file = ASSETS_DIR / f"{key}.svg"
+
+              svg_file.write_text(
+                  svg,
+                  encoding="utf-8"
+              )
+
+              results.append({
+                  "date": month_start,
+                  "key": key,
+                  "total": total
+              })
+
+
+          # ------------------------------------------------------------
+          # MONTH PAGES WITH PREVIOUS / NEXT
+          # ------------------------------------------------------------
+
+          for index, item in enumerate(results):
+
+              month_start = item["date"]
+              key = item["key"]
+
+              month_title = month_start.strftime("%B %Y")
+
+              previous_item = (
+                  results[index - 1]
+                  if index > 0
+                  else None
+              )
+
+              next_item = (
+                  results[index + 1]
+                  if index < len(results) - 1
+                  else None
+              )
+
+              previous_link = (
+                  f'<a href="./{previous_item["key"]}.md">'
+                  f'⬅ {previous_item["date"].strftime("%B %Y")}'
+                  f'</a>'
+                  if previous_item
+                  else "⬅ Previous"
+              )
+
+              next_link = (
+                  f'<a href="./{next_item["key"]}.md">'
+                  f'{next_item["date"].strftime("%B %Y")} ➡'
+                  f'</a>'
+                  if next_item
+                  else "Next ➡"
+              )
+
+              page = f"""# 📅 {month_title} Contributions
+
+          <p align="center">
+            <img
+              src="./assets/{key}.svg"
+              width="100%"
+              alt="{month_title} contribution calendar"
+            />
+          </p>
+
+          <p align="center">
+            {previous_link}
+            &nbsp;&nbsp;&nbsp; | &nbsp;&nbsp;&nbsp;
+            <a href="./README.md">📅 All Months</a>
+            &nbsp;&nbsp;&nbsp; | &nbsp;&nbsp;&nbsp;
+            {next_link}
+          </p>
+
+          <p align="center">
+            <strong>{item["total"]} contributions during {month_title}</strong>
+          </p>
+
+          ---
+
+          <p align="center">
+            Automatically generated from GitHub contribution data.
+          </p>
+          """
+
+              page_file = ACTIVITY_DIR / f"{key}.md"
+
+              page_file.write_text(
+                  page,
+                  encoding="utf-8"
+              )
+
+
+          # ------------------------------------------------------------
+          # ALL MONTHS INDEX
+          # ------------------------------------------------------------
+
+          rows = []
+
+          reversed_results = list(reversed(results))
+
+          for i in range(0, len(reversed_results), 3):
+
+              group = reversed_results[i:i + 3]
+
+              cells = []
+
+              for item in group:
+
+                  label = item["date"].strftime("%B %Y")
+
+                  cells.append(
+                      f'''
+                      <td align="center" width="33%">
+                        <a href="./{item["key"]}.md">
+                          <strong>{label}</strong>
+                        </a>
+                        <br/>
+                        {item["total"]} contributions
+                      </td>
+                      '''
+                  )
+
+              while len(cells) < 3:
+
+                  cells.append(
+                      '<td width="33%"></td>'
+                  )
+
+              rows.append(
+                  "<tr>" +
+                  "".join(cells) +
+                  "</tr>"
+              )
+
+
+          index_page = f"""# 📊 Monthly GitHub Contribution History
+
+          <p align="center">
+            Explore <strong>@{USERNAME}</strong>'s GitHub contribution activity month by month.
+          </p>
+
+          <table>
+          {''.join(rows)}
+          </table>
+
+          ---
+
+          <p align="center">
+            <a href="../README.md">← Back to GitHub Profile</a>
+          </p>
+          """
+
+          (ACTIVITY_DIR / "README.md").write_text(
+              index_page,
+              encoding="utf-8"
+          )
+
+
+          # ------------------------------------------------------------
+          # UPDATE MAIN PROFILE README AUTOMATICALLY
+          # ------------------------------------------------------------
+
+          latest = results[-1]
+
+          latest_title = latest["date"].strftime("%B %Y")
+          latest_key = latest["key"]
+
+          profile_section = f"""<!-- MONTHLY-CONTRIBUTIONS:START -->
+
+          ## 📅 Monthly Contribution Activity
+
+          <p align="center">
+            <a href="./activity/{latest_key}.md">
+              <img
+                src="./activity/assets/{latest_key}.svg"
+                width="95%"
+                alt="{latest_title} GitHub Contributions"
+              />
+            </a>
+          </p>
+
+          <p align="center">
+            <a href="./activity/{latest_key}.md">
+              <strong>← Previous / Next →</strong>
+            </a>
+            &nbsp;&nbsp;•&nbsp;&nbsp;
+            <a href="./activity/README.md">
+              <strong>View All Months 📊</strong>
+            </a>
+          </p>
+
+          <!-- MONTHLY-CONTRIBUTIONS:END -->"""
+
+
+          readme_path = ROOT / "README.md"
+
+          if readme_path.exists():
+
+              readme = readme_path.read_text(
+                  encoding="utf-8"
+              )
+
+          else:
+              readme = f"# {USERNAME}\n"
+
+
+          pattern = re.compile(
+              r"<!-- MONTHLY-CONTRIBUTIONS:START -->.*?"
+              r"<!-- MONTHLY-CONTRIBUTIONS:END -->",
+              re.DOTALL
+          )
+
+
+          if pattern.search(readme):
+
+              readme = pattern.sub(
+                  profile_section,
+                  readme
+              )
+
+          else:
+
+              readme = (
+                  readme.rstrip() +
+                  "\n\n---\n\n" +
+                  profile_section +
+                  "\n"
+              )
+
+
+          readme_path.write_text(
+              readme,
+              encoding="utf-8"
+          )
+
+
+          print("")
+          print("✅ Monthly contribution calendar generated.")
+          print(
+              f"✅ Latest month: {latest_title}"
+          )
+          print(
+              f"✅ Generated {len(results)} monthly pages."
+          )
+          print(
+              "✅ README.md updated automatically."
+          )
+
+          PY
+
+      - name: Commit generated contribution pages
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add README.md activity/
+
+          if git diff --cached --quiet; then
+            echo "No contribution changes to commit."
+          else
+            git commit -m "chore: update monthly contribution calendar"
+            git push
+          fi

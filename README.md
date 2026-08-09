@@ -204,3 +204,31 @@ Here are some ideas to get you started:
 - 😄 Pronouns: ...
 - ⚡ Fun fact: ...
 -->
+
+---
+
+<!-- MONTHLY-CONTRIBUTIONS:START -->
+
+## 📅 Monthly Contribution Activity
+
+<p align="center">
+  <a href="./activity/2026-08.md">
+    <img
+      src="./activity/assets/2026-08.svg"
+      width="95%"
+      alt="August 2026 GitHub Contributions"
+    />
+  </a>
+</p>
+
+<p align="center">
+  <a href="./activity/2026-08.md">
+    <strong>← Previous / Next →</strong>
+  </a>
+  &nbsp;&nbsp;•&nbsp;&nbsp;
+  <a href="./activity/README.md">
+    <strong>View All Months 📊</strong>
+  </a>
+</p>
+
+<!-- MONTHLY-CONTRIBUTIONS:END -->

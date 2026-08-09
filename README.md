@@ -200,7 +200,9 @@ Here are some ideas to get you started:
   <a href="./activity/2026-08.md">
     <strong>← Previous / Next →</strong>
   </a>
+
   &nbsp;&nbsp;•&nbsp;&nbsp;
+
   <a href="./activity/README.md">
     <strong>View All Months 📊</strong>
   </a>

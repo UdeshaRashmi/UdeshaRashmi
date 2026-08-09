@@ -132,12 +132,13 @@ Learn continuously. Build purposefully. Improve consistently.
 I believe strong software engineering is not only about knowing technologies — it is about understanding problems, designing maintainable solutions, writing clean code, and continuously improving through practical experience.
 -------------
 
-<div align="center">
-
-<img
-  src="https://github-readme-activity-graph.vercel.app/graph?username=UdeshaRashmi&bg_color=0D1117&color=9D4EDD&line=58A6FF&point=FF4ECD&area=true&hide_border=true"
-  width="95%"
-/>
+<p align="center">
+  <img
+    src="https://github-readme-activity-graph.vercel.app/graph?username=UdeshaRashmi&bg_color=0D1117&color=9D4EDD&line=58A6FF&point=FF4ECD&area=true&hide_border=true&days=90"
+    width="95%"
+  />
+</p>
+--------------
 
 </div>
 🤝 Let's Connect

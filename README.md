@@ -130,34 +130,9 @@ Sri Lanka Institute of Information Technology (SLIIT)
 Learn continuously. Build purposefully. Improve consistently.
 
 I believe strong software engineering is not only about knowing technologies — it is about understanding problems, designing maintainable solutions, writing clean code, and continuously improving through practical experience.
--------------
-
-<p align="center">
-  <img
-    src="https://github-readme-activity-graph.vercel.app/graph?username=UdeshaRashmi&bg_color=0D1117&color=9D4EDD&line=58A6FF&point=FF4ECD&area=true&hide_border=true&days=90"
-    width="95%"
-  />
-</p>
---------------
-
-</div>
-🤝 Let's Connect
-
-I'm always interested in connecting with developers, learning from the community, collaborating on meaningful projects, and exploring opportunities to grow as a software engineer.
-
-<div align="center">
-
-<a href="https://www.linkedin.com/in/udesha-rashmi-944894331"> <img src="https://img.shields.io/badge/Connect_on_LinkedIn-0A66C2?style=for-the-badge&logo=linkedin&logoColor=white" /> </a>
-
-<a href="mailto:rashmiparanamana1999@gmail.com"> <img src="https://img.shields.io/badge/Send_an_Email-EA4335?style=for-the-badge&logo=gmail&logoColor=white" /> </a>
-
-<br/><br/>
-
-⭐ Thanks for visiting my profile!
-
-</div>
 
 ---
+
 
  ## 👋 A Little More About Me
 
@@ -171,7 +146,7 @@ I'm always interested in connecting with developers, learning from the community
 * 🎯 My goal is to grow as a **Software Engineer** while building reliable, maintainable, and meaningful software products.
  * ⚡ I’m passionate about exploring emerging technologies, solving real-world development challenges and continuously improving my skills to build efficient, scalable and high-quality software solutions.
 
-   ------
+---
 
  🚀 I enjoy building end-to-end software solutions, from responsive user interfaces to backend APIs and database integration.
 
@@ -185,7 +160,7 @@ I'm always interested in connecting with developers, learning from the community
 
 📚 I believe continuous learning is an essential part of becoming a better software engineer.
 
-------------
+---
 
 
  
@@ -205,7 +180,7 @@ Here are some ideas to get you started:
 - ⚡ Fun fact: ...
 -->
 
----
+
 
 <!-- MONTHLY-CONTRIBUTIONS:START -->
 
@@ -232,3 +207,23 @@ Here are some ideas to get you started:
 </p>
 
 <!-- MONTHLY-CONTRIBUTIONS:END -->
+
+---
+</div>
+🤝 Let's Connect
+
+I'm always interested in connecting with developers, learning from the community, collaborating on meaningful projects, and exploring opportunities to grow as a software engineer.
+
+<div align="center">
+
+<a href="https://www.linkedin.com/in/udesha-rashmi-944894331"> <img src="https://img.shields.io/badge/Connect_on_LinkedIn-0A66C2?style=for-the-badge&logo=linkedin&logoColor=white" /> </a>
+
+<a href="mailto:rashmiparanamana1999@gmail.com"> <img src="https://img.shields.io/badge/Send_an_Email-EA4335?style=for-the-badge&logo=gmail&logoColor=white" /> </a>
+
+<br/><br/>
+
+⭐ Thanks for visiting my profile!
+
+</div>
+
+---

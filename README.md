@@ -17,6 +17,21 @@ I am a **BSc (Hons) Information Technology undergraduate at SLIIT**, interested 
 
 I enjoy working across frontend and backend development, REST APIs, databases, and modern web technologies while continuously improving my software engineering skills.
 
+## 🧸 Cute Corner
+
+<div align="center">
+
+<img src="./assets/cute1.gif" width="90"/>
+&nbsp;&nbsp;&nbsp;
+<img src="./assets/cute2.gif" width="90"/>
+&nbsp;&nbsp;&nbsp;
+<img src="./assets/cute3.gif" width="90"/>
+
+<br/><br/>
+
+✨ Coding • Learning • Creating ✨
+
+</div>
 ---
 
 ## 🎓 Education

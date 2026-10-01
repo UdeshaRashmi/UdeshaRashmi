@@ -188,17 +188,17 @@ Here are some ideas to get you started:
 ## 📅 Monthly Contribution Activity
 
 <p align="center">
-  <a href="./activity/2026-09.md">
+  <a href="./activity/2026-10.md">
     <img
-      src="./activity/assets/2026-09.svg"
+      src="./activity/assets/2026-10.svg"
       width="95%"
-      alt="September 2026 GitHub Contributions"
+      alt="October 2026 GitHub Contributions"
     />
   </a>
 </p>
 
 <p align="center">
-  <a href="./activity/2026-09.md">
+  <a href="./activity/2026-10.md">
     <strong>← Previous / Next →</strong>
   </a>
 

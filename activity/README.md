@@ -11,6 +11,17 @@
               align="center"
               width="33%"
             >
+              <a href="./2026-10.md">
+                <strong>October 2026</strong>
+              </a>
+              <br/>
+              0 contributions
+            </td>
+            
+            <td
+              align="center"
+              width="33%"
+            >
               <a href="./2026-09.md">
                 <strong>September 2026</strong>
               </a>
@@ -28,7 +39,7 @@
               <br/>
               29 contributions
             </td>
-            
+            </tr><tr>
             <td
               align="center"
               width="33%"
@@ -39,7 +50,7 @@
               <br/>
               145 contributions
             </td>
-            </tr><tr>
+            
             <td
               align="center"
               width="33%"
@@ -61,7 +72,7 @@
               <br/>
               12 contributions
             </td>
-            
+            </tr><tr>
             <td
               align="center"
               width="33%"
@@ -72,7 +83,7 @@
               <br/>
               5 contributions
             </td>
-            </tr><tr>
+            
             <td
               align="center"
               width="33%"
@@ -94,7 +105,7 @@
               <br/>
               30 contributions
             </td>
-            
+            </tr><tr>
             <td
               align="center"
               width="33%"
@@ -105,7 +116,7 @@
               <br/>
               31 contributions
             </td>
-            </tr><tr>
+            
             <td
               align="center"
               width="33%"
@@ -126,17 +137,6 @@
               </a>
               <br/>
               112 contributions
-            </td>
-            
-            <td
-              align="center"
-              width="33%"
-            >
-              <a href="./2025-10.md">
-                <strong>October 2025</strong>
-              </a>
-              <br/>
-              2 contributions
             </td>
             </tr>
 </table>
